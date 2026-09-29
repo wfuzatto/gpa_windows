@@ -397,11 +397,16 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
-            SplitterDistance = 350,
             BackColor = Bg,
-            Panel1MinSize = 280,
-            Panel2MinSize = 300
+            Panel1MinSize = 0,
+            Panel2MinSize = 0
         };
+
+        // During construction a docked SplitContainer can still have Width == 0.
+        // Setting SplitterDistance in the initializer then throws before the form
+        // is shown. Apply a safe distance only after the control has a real size.
+        split.HandleCreated += (_, _) => SetSafeStatusSplitterDistance(split);
+        split.Resize += (_, _) => SetSafeStatusSplitterDistance(split);
 
         var status = new FlowLayoutPanel
         {
@@ -439,6 +444,16 @@ public sealed class MainForm : Form
         split.Panel2.Controls.Add(logHost);
 
         return page.With(split);
+    }
+
+    private static void SetSafeStatusSplitterDistance(SplitContainer split)
+    {
+        if (split.Width <= 0)
+            return;
+
+        var minimum = 280;
+        var maximum = Math.Max(minimum, split.Width - 300);
+        split.SplitterDistance = Math.Clamp(350, minimum, maximum);
     }
 
     private Control BuildActionBar()
@@ -554,7 +569,7 @@ public sealed class MainForm : Form
     {
         _appsGrid.EndEdit();
 
-        if (BindingContext[_appRows] is CurrencyManager manager)
+        if (BindingContext is not null && BindingContext[_appRows] is CurrencyManager manager)
             manager.EndCurrentEdit();
 
         var previous = ConfigStore.Load();

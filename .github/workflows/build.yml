@@ -28,6 +28,9 @@ jobs:
       - name: Build
         run: dotnet build .\gpa_windows.sln -c Release --no-restore
 
+      - name: Test
+        run: dotnet test .\gpa_windows.sln -c Release --no-build --no-restore
+
       - name: Publish single-file EXE
         run: dotnet publish .\src\GpaWindows\GpaWindows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\artifacts\publish
 

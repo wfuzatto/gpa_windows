@@ -45,6 +45,9 @@ public static class AppControlService
                 if (windowsPath is not null && IsUnderDirectory(path, windowsPath))
                     continue;
 
+                if (IsAlwaysProtected(path))
+                    continue;
+
                 var mustBlock = denied.Contains(path);
 
                 if (!mustBlock && config.BlockUnknownApplications)
@@ -53,7 +56,11 @@ public static class AppControlService
                 if (!mustBlock)
                     continue;
 
+                var username = TryGetUserName(process);
                 process.Kill(entireProcessTree: true);
+                AppLogger.Write(
+                    "app-block.log",
+                    $"user={username}; executable={Path.GetFileName(path)}; path={path}; pid={process.Id}; reason={(config.BlockUnknownApplications && !denied.Contains(path) ? "strict-mode" : "explicit-deny")}");
             }
             catch
             {
@@ -102,5 +109,39 @@ public static class AppControlService
         {
             return null;
         }
+    }
+
+    public static string? NormalizePathForPolicy(string? value) => NormalizePath(value);
+
+    public static bool IsProtectedExecutable(string? value) =>
+        value is not null && IsAlwaysProtected(NormalizePath(value));
+
+    private static bool IsAlwaysProtected(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return true;
+
+        var name = Path.GetFileName(path);
+        return name.Equals("GpaWindows.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("explorer.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("services.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("winlogon.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("csrss.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("wininit.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("lsass.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("smss.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("Code.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("cmd.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("dotnet.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("conhost.exe", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("WindowsTerminal.exe", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string TryGetUserName(Process process)
+    {
+        try { return process.StartInfo.UserName ?? Environment.UserName; }
+        catch { return Environment.UserName; }
     }
 }

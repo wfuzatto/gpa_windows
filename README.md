@@ -91,7 +91,22 @@ O `hosts` ainda é protegido nesse modo para evitar que entradas antigas permita
 ```powershell
 dotnet restore .\gpa_windows.sln
 dotnet build .\gpa_windows.sln -c Release
+dotnet test .\gpa_windows.sln -c Release
 ```
+
+## Diagnóstico e logs
+
+O executável registra falhas de inicialização em `%ProgramData%\GPAWindows\logs\startup.log`.
+Para executar verificações não destrutivas sem abrir a interface:
+
+```powershell
+.\GpaWindows.exe --diagnostic
+Get-Content "$env:ProgramData\GPAWindows\diagnostic-report.txt"
+```
+
+O relatório inclui versão, Windows, arquitetura, privilégios, serviço, UDP/53,
+inventário de aplicativos, endpoints de áudio e permissões de rollback. O modo
+diagnóstico não aplica políticas.
 
 ## Publicar EXE único
 

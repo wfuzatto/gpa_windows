@@ -34,6 +34,22 @@ public sealed class DnsFilterService : IDisposable
         _loop = Task.Run(() => ListenAsync(_cts.Token));
     }
 
+    public static bool IsPortAvailable(int port = 53)
+    {
+        using var listener = new UdpClient();
+        try
+        {
+            listener.Client.Bind(new IPEndPoint(IPAddress.Loopback, port));
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
+    }
+
+    public static string NormalizeDomainForPolicy(string domain) => NormalizeDomain(domain);
+
     public void Dispose()
     {
         try

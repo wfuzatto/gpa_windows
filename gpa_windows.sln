@@ -4,6 +4,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GpaWindows", "src\GpaWindows\GpaWindows.csproj", "{A4312499-5A76-4D84-9E15-FF99A15E3947}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GpaWindows.Tests", "tests\GpaWindows.Tests\GpaWindows.Tests.csproj", "{D7F7E4D2-3A42-4B3A-A8FB-6CBB7A5CC6AB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,5 +16,9 @@ Global
 		{A4312499-5A76-4D84-9E15-FF99A15E3947}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4312499-5A76-4D84-9E15-FF99A15E3947}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4312499-5A76-4D84-9E15-FF99A15E3947}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D7F7E4D2-3A42-4B3A-A8FB-6CBB7A5CC6AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D7F7E4D2-3A42-4B3A-A8FB-6CBB7A5CC6AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7F7E4D2-3A42-4B3A-A8FB-6CBB7A5CC6AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D7F7E4D2-3A42-4B3A-A8FB-6CBB7A5CC6AB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

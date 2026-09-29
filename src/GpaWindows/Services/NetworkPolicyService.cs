@@ -20,6 +20,10 @@ public static class NetworkPolicyService
 
     public static void ApplyStrictDns(PolicyConfig config)
     {
+        if (!DnsFilterService.IsPortAvailable())
+            throw new InvalidOperationException(
+                "A porta UDP/53 já está ocupada. O DNS Allowlist não foi aplicado e a configuração de rede não foi alterada.");
+
         EnsureBackups(config);
 
         if (config.SanitizeHostsWhenDnsAllowListEnabled)
