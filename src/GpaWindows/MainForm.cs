@@ -6,19 +6,30 @@ namespace GpaWindows;
 
 public sealed class MainForm : Form
 {
+    private static readonly Color Bg = Color.FromArgb(13, 17, 23);
+    private static readonly Color Surface = Color.FromArgb(22, 27, 34);
+    private static readonly Color Surface2 = Color.FromArgb(33, 38, 45);
+    private static readonly Color TextPrimary = Color.FromArgb(235, 240, 246);
+    private static readonly Color TextMuted = Color.FromArgb(145, 156, 170);
+
     private readonly CheckBox _enabled = NewCheckBox("Ativar fiscalização contínua");
     private readonly CheckBox _lockWallpaper = NewCheckBox("Impedir alteração do papel de parede");
     private readonly CheckBox _lockTheme = NewCheckBox("Impedir alteração do tema do Windows");
-    private readonly CheckBox _blockAudio = NewCheckBox("Bloquear áudio do computador (desabilitar endpoints de áudio)");
+    private readonly CheckBox _blockAudio = NewCheckBox("Bloquear áudio do computador");
 
     private readonly CheckBox _applicationControl = NewCheckBox("Ativar controle de aplicativos");
-    private readonly CheckBox _blockUnknownApps = NewCheckBox("Modo estrito: bloquear executáveis desconhecidos/portáteis não autorizados");
+    private readonly CheckBox _blockUnknownApps = NewCheckBox(
+        "Modo estrito: bloquear executáveis desconhecidos/portáteis não autorizados");
 
-    private readonly CheckBox _dnsAllowList = NewCheckBox("Ativar DNS Allowlist (bloquear qualquer domínio não autorizado)");
-    private readonly CheckBox _disableDoH = NewCheckBox("Desativar DNS-over-HTTPS no Edge e Chrome");
-    private readonly CheckBox _sanitizeHosts = NewCheckBox("Proteger/limpar o arquivo hosts durante o modo estrito");
+    private readonly CheckBox _dnsAllowList = NewCheckBox(
+        "Ativar DNS Allowlist (bloquear qualquer domínio não autorizado)");
+    private readonly CheckBox _disableDoH = NewCheckBox(
+        "Desativar DNS-over-HTTPS no Edge e Chrome");
+    private readonly CheckBox _sanitizeHosts = NewCheckBox(
+        "Proteger/limpar o arquivo hosts durante o modo estrito");
 
     private readonly BindingList<ManagedApplication> _appRows = [];
+
     private readonly DataGridView _appsGrid = new()
     {
         AutoGenerateColumns = false,
@@ -30,9 +41,8 @@ public sealed class MainForm : Form
         SelectionMode = DataGridViewSelectionMode.FullRowSelect,
         BackgroundColor = Color.FromArgb(20, 24, 31),
         GridColor = Color.FromArgb(48, 54, 61),
-        BorderStyle = BorderStyle.None,
-        Height = 300,
-        Width = 650,
+        BorderStyle = BorderStyle.FixedSingle,
+        Dock = DockStyle.Fill,
         AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None,
         ColumnHeadersHeight = 36,
         RowTemplate = { Height = 32 }
@@ -42,15 +52,14 @@ public sealed class MainForm : Form
     {
         Multiline = true,
         ScrollBars = ScrollBars.Vertical,
-        Height = 150,
-        Dock = DockStyle.Top,
+        Dock = DockStyle.Fill,
         Font = new Font("Consolas", 10.5f),
         PlaceholderText = "exemplo.com\r\napi.exemplo.com\r\n..."
     };
 
     private readonly TextBox _upstreamDns = new()
     {
-        Width = 160,
+        Width = 180,
         Text = "1.1.1.1"
     };
 
@@ -65,11 +74,12 @@ public sealed class MainForm : Form
     private readonly Label _serviceStatus = NewValueLabel();
     private readonly Label _lastApplied = NewValueLabel();
     private readonly Label _configPath = NewValueLabel();
+    private readonly Label _appCount = NewValueLabel();
 
     private readonly RichTextBox _log = new()
     {
         ReadOnly = true,
-        BorderStyle = BorderStyle.None,
+        BorderStyle = BorderStyle.FixedSingle,
         BackColor = Color.FromArgb(20, 24, 31),
         ForeColor = Color.FromArgb(205, 214, 226),
         Font = new Font("Consolas", 9.5f),
@@ -79,85 +89,62 @@ public sealed class MainForm : Form
     public MainForm()
     {
         Text = "GPA Windows — Diretivas Locais";
-        Width = 1240;
-        Height = 900;
-        MinimumSize = new Size(1040, 720);
+        Width = 1180;
+        Height = 820;
+        MinimumSize = new Size(920, 650);
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.FromArgb(13, 17, 23);
-        ForeColor = Color.FromArgb(235, 240, 246);
+        BackColor = Bg;
+        ForeColor = TextPrimary;
         Font = new Font("Segoe UI", 10f);
 
         ConfigureAppsGrid();
-        Controls.Add(BuildLayout());
+        Controls.Add(BuildRootLayout());
 
         Load += (_, _) =>
         {
             LoadConfig();
             RefreshStatus();
         };
+
+        Shown += async (_, _) =>
+        {
+            if (_appRows.Count == 0)
+                await RefreshInstalledApplicationsAsync();
+        };
     }
 
-    private void ConfigureAppsGrid()
-    {
-        _appsGrid.EnableHeadersVisualStyles = false;
-        _appsGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(33, 38, 45);
-        _appsGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-        _appsGrid.DefaultCellStyle.BackColor = Color.FromArgb(20, 24, 31);
-        _appsGrid.DefaultCellStyle.ForeColor = Color.FromArgb(225, 231, 239);
-        _appsGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(38, 78, 120);
-        _appsGrid.DefaultCellStyle.SelectionForeColor = Color.White;
-
-        _appsGrid.Columns.Add(new DataGridViewCheckBoxColumn
-        {
-            DataPropertyName = nameof(ManagedApplication.Allowed),
-            HeaderText = "Permitir",
-            Width = 70
-        });
-
-        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            DataPropertyName = nameof(ManagedApplication.DisplayName),
-            HeaderText = "Programa",
-            Width = 190,
-            ReadOnly = true
-        });
-
-        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            DataPropertyName = nameof(ManagedApplication.Publisher),
-            HeaderText = "Fabricante",
-            Width = 140,
-            ReadOnly = true
-        });
-
-        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            DataPropertyName = nameof(ManagedApplication.ExecutablePath),
-            HeaderText = "Executável",
-            Width = 300,
-            ReadOnly = true
-        });
-
-        _appsGrid.DataSource = _appRows;
-    }
-
-    private Control BuildLayout()
+    private Control BuildRootLayout()
     {
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(24),
-            ColumnCount = 2,
-            RowCount = 2
+            Padding = new Padding(20),
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = Bg
         };
 
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
 
-        var header = new Panel { Dock = DockStyle.Fill };
-        header.Controls.Add(new Label
+        root.Controls.Add(BuildHeader(), 0, 0);
+        root.Controls.Add(BuildTabs(), 0, 1);
+        root.Controls.Add(BuildActionBar(), 0, 2);
+
+        return root;
+    }
+
+    private Control BuildHeader()
+    {
+        var panel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Bg
+        };
+
+        panel.Controls.Add(new Label
         {
             Text = "GPA Windows",
             Font = new Font("Segoe UI Semibold", 24f),
@@ -165,140 +152,141 @@ public sealed class MainForm : Form
             AutoSize = true,
             Location = new Point(0, 0)
         });
-        header.Controls.Add(new Label
+
+        panel.Controls.Add(new Label
         {
             Text = "Gerenciador de Políticas Administrativas locais",
             Font = new Font("Segoe UI", 10.5f),
-            ForeColor = Color.FromArgb(145, 156, 170),
+            ForeColor = TextMuted,
             AutoSize = true,
-            Location = new Point(3, 43)
+            Location = new Point(3, 42)
         });
 
-        root.SetColumnSpan(header, 2);
-        root.Controls.Add(header, 0, 0);
+        return panel;
+    }
 
-        var left = new FlowLayoutPanel
+    private Control BuildTabs()
+    {
+        var tabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI Semibold", 10f),
+            Padding = new Point(16, 7)
+        };
+
+        tabs.TabPages.Add(BuildPoliciesTab());
+        tabs.TabPages.Add(BuildApplicationsTab());
+        tabs.TabPages.Add(BuildNetworkTab());
+        tabs.TabPages.Add(BuildStatusTab());
+
+        return tabs;
+    }
+
+    private TabPage BuildPoliciesTab()
+    {
+        var page = NewTabPage("Políticas");
+
+        var scroll = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoScroll = true,
-            Padding = new Padding(0, 0, 14, 0)
+            BackColor = Bg,
+            Padding = new Padding(18)
         };
 
-        left.Controls.Add(BuildGeneralCard());
-        left.Controls.Add(BuildPersonalizationCard());
-        left.Controls.Add(BuildAudioCard());
-        left.Controls.Add(BuildApplicationControlCard());
-        left.Controls.Add(BuildDnsCard());
-        left.Controls.Add(BuildActionsCard());
+        scroll.Controls.Add(SectionTitle("Fiscalização"));
+        scroll.Controls.Add(_enabled);
+        scroll.Controls.Add(BuildIntervalRow());
 
-        var right = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 2,
-            Padding = new Padding(8, 0, 0, 0)
-        };
-        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 220));
-        right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        right.Controls.Add(BuildStatusCard(), 0, 0);
-        right.Controls.Add(BuildLogCard(), 0, 1);
+        scroll.Controls.Add(SectionTitle("Personalização"));
+        scroll.Controls.Add(_lockWallpaper);
+        scroll.Controls.Add(_lockTheme);
 
-        root.Controls.Add(left, 0, 1);
-        root.Controls.Add(right, 1, 1);
+        scroll.Controls.Add(SectionTitle("Áudio"));
+        scroll.Controls.Add(_blockAudio);
+        scroll.Controls.Add(DescriptionLabel(
+            "Quando ativado, o GPA desabilita os endpoints PnP de áudio. " +
+            "A política é reaplicada periodicamente e os dispositivos desligados pelo GPA " +
+            "são lembrados para restauração posterior. O bloqueio também pode afetar microfones."));
 
-        return root;
+        return page.With(scroll);
     }
 
-    private Control BuildGeneralCard()
+    private Control BuildIntervalRow()
     {
-        var panel = Card("Fiscalização");
-        var body = BodyFlow();
-
-        _enabled.Checked = true;
-        body.Controls.Add(_enabled);
-
-        var intervalRow = new FlowLayoutPanel
+        var row = new FlowLayoutPanel
         {
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(3, 10, 3, 3)
+            WrapContents = false,
+            Margin = new Padding(3, 4, 3, 18)
         };
-        intervalRow.Controls.Add(new Label
+
+        row.Controls.Add(new Label
         {
             Text = "Reaplicar diretivas gerais a cada",
             AutoSize = true,
-            Padding = new Padding(0, 5, 4, 0)
+            ForeColor = TextPrimary,
+            Padding = new Padding(0, 5, 6, 0)
         });
-        intervalRow.Controls.Add(_interval);
-        intervalRow.Controls.Add(new Label
+
+        row.Controls.Add(_interval);
+
+        row.Controls.Add(new Label
         {
             Text = "segundos",
             AutoSize = true,
-            Padding = new Padding(4, 5, 0, 0)
+            ForeColor = TextPrimary,
+            Padding = new Padding(6, 5, 0, 0)
         });
 
-        body.Controls.Add(intervalRow);
-        panel.Controls.Add(body);
-        return panel;
+        return row;
     }
 
-    private Control BuildPersonalizationCard()
+    private TabPage BuildApplicationsTab()
     {
-        var panel = Card("Personalização do Windows");
-        var body = BodyFlow();
-        body.Controls.Add(_lockWallpaper);
-        body.Controls.Add(_lockTheme);
-        panel.Controls.Add(body);
-        return panel;
-    }
+        var page = NewTabPage("Aplicativos");
 
-    private Control BuildAudioCard()
-    {
-        var panel = Card("Áudio");
-        var body = BodyFlow();
-
-        body.Controls.Add(_blockAudio);
-        body.Controls.Add(new Label
+        var layout = new TableLayoutPanel
         {
-            Text = "O bloqueio desabilita os endpoints PnP de áudio. Isso impede reprodução e também pode indisponibilizar microfones enquanto a política estiver ativa.",
-            ForeColor = Color.FromArgb(160, 170, 182),
-            AutoSize = true,
-            MaximumSize = new Size(650, 0),
-            Margin = new Padding(3, 6, 3, 3)
-        });
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = new Padding(16),
+            BackColor = Bg
+        };
 
-        panel.Controls.Add(body);
-        return panel;
-    }
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
 
-    private Control BuildApplicationControlCard()
-    {
-        var panel = Card("Controle de aplicativos");
-        var body = BodyFlow();
-
-        body.Controls.Add(_applicationControl);
-        body.Controls.Add(_blockUnknownApps);
-
-        body.Controls.Add(new Label
+        var options = new FlowLayoutPanel
         {
-            Text = "Marcado = permitido. Desmarcado = o serviço encerra o programa ao detectar sua execução. Componentes do Windows e o próprio GPA Windows são protegidos.",
-            ForeColor = Color.FromArgb(160, 170, 182),
-            AutoSize = true,
-            MaximumSize = new Size(650, 0),
-            Margin = new Padding(3, 6, 3, 8)
-        });
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Bg
+        };
+
+        options.Controls.Add(_applicationControl);
+        options.Controls.Add(_blockUnknownApps);
+        options.Controls.Add(DescriptionLabel(
+            "Marcado na coluna Permitir = autorizado. Desmarcado = o serviço encerra o programa " +
+            "quando detectar sua execução. Componentes do Windows e o próprio GPA são protegidos."));
 
         var toolbar = new FlowLayoutPanel
         {
-            AutoSize = true,
+            Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
-            Margin = new Padding(3, 0, 3, 8)
+            WrapContents = false,
+            BackColor = Bg
         };
 
         var refresh = NewButton("Atualizar lista");
-        refresh.Click += (_, _) => RefreshInstalledApplications();
+        refresh.Click += async (_, _) => await RefreshInstalledApplicationsAsync();
 
         var addExe = NewButton("Adicionar EXE...");
         addExe.Click += (_, _) => AddExecutableManually();
@@ -314,135 +302,230 @@ public sealed class MainForm : Form
         toolbar.Controls.Add(allowAll);
         toolbar.Controls.Add(blockAll);
 
-        body.Controls.Add(toolbar);
-        body.Controls.Add(_appsGrid);
-
-        body.Controls.Add(new Label
+        var footer = new Panel
         {
-            Text = "Entradas sem caminho de executável foram inventariadas, mas não podem ser bloqueadas até que um EXE correspondente seja informado.",
-            ForeColor = Color.FromArgb(160, 170, 182),
-            AutoSize = true,
-            MaximumSize = new Size(650, 0),
-            Margin = new Padding(3, 6, 3, 3)
-        });
+            Dock = DockStyle.Fill,
+            BackColor = Bg
+        };
 
-        panel.Controls.Add(body);
-        return panel;
+        _appCount.Location = new Point(0, 5);
+        footer.Controls.Add(_appCount);
+
+        var hint = DescriptionLabel(
+            "Programas portáteis podem ser incluídos com “Adicionar EXE...”. " +
+            "Entradas sem caminho de executável não podem ser bloqueadas até o EXE ser informado.");
+        hint.Location = new Point(0, 27);
+        footer.Controls.Add(hint);
+
+        layout.Controls.Add(options, 0, 0);
+        layout.Controls.Add(toolbar, 0, 1);
+        layout.Controls.Add(_appsGrid, 0, 2);
+        layout.Controls.Add(footer, 0, 3);
+
+        return page.With(layout);
     }
 
-    private Control BuildDnsCard()
+    private TabPage BuildNetworkTab()
     {
-        var panel = Card("Rede / DNS Allowlist");
-        var body = BodyFlow();
+        var page = NewTabPage("Rede / DNS");
 
-        body.Controls.Add(_dnsAllowList);
-        body.Controls.Add(_disableDoH);
-        body.Controls.Add(_sanitizeHosts);
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = new Padding(16),
+            BackColor = Bg
+        };
 
-        body.Controls.Add(new Label
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 118));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+
+        var options = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Bg
+        };
+
+        options.Controls.Add(_dnsAllowList);
+        options.Controls.Add(_disableDoH);
+        options.Controls.Add(_sanitizeHosts);
+
+        var domainsLabel = new Label
         {
             Text = "Domínios permitidos — um por linha. Permitir exemplo.com também libera seus subdomínios.",
-            ForeColor = Color.FromArgb(160, 170, 182),
-            AutoSize = true,
-            MaximumSize = new Size(650, 0),
-            Margin = new Padding(3, 12, 3, 6)
-        });
-
-        _domains.Width = 650;
-        body.Controls.Add(_domains);
+            Dock = DockStyle.Fill,
+            ForeColor = TextMuted,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
 
         var dnsRow = new FlowLayoutPanel
         {
-            AutoSize = true,
+            Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(3, 10, 3, 0)
+            WrapContents = false,
+            BackColor = Bg,
+            Padding = new Padding(0, 8, 0, 0)
         };
+
         dnsRow.Controls.Add(new Label
         {
             Text = "DNS upstream:",
             AutoSize = true,
+            ForeColor = TextPrimary,
             Padding = new Padding(0, 5, 6, 0)
         });
         dnsRow.Controls.Add(_upstreamDns);
-        body.Controls.Add(dnsRow);
 
-        panel.Controls.Add(body);
-        return panel;
+        layout.Controls.Add(options, 0, 0);
+        layout.Controls.Add(domainsLabel, 0, 1);
+        layout.Controls.Add(_domains, 0, 2);
+        layout.Controls.Add(dnsRow, 0, 3);
+
+        return page.With(layout);
     }
 
-    private Control BuildActionsCard()
+    private TabPage BuildStatusTab()
     {
-        var panel = Card("Ações");
-        var body = new FlowLayoutPanel
+        var page = NewTabPage("Status");
+
+        var split = new SplitContainer
         {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
-            Padding = new Padding(14, 8, 14, 14)
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            SplitterDistance = 350,
+            BackColor = Bg,
+            Panel1MinSize = 280,
+            Panel2MinSize = 300
+        };
+
+        var status = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(18),
+            BackColor = Bg
+        };
+
+        status.Controls.Add(SectionTitle("Estado do GPA"));
+        status.Controls.Add(StatusPair("Serviço", _serviceStatus));
+        status.Controls.Add(StatusPair("Última aplicação", _lastApplied));
+        status.Controls.Add(StatusPair("Configuração", _configPath));
+
+        var refresh = NewButton("Atualizar status");
+        refresh.Margin = new Padding(3, 18, 3, 3);
+        refresh.Click += (_, _) => RefreshStatus();
+        status.Controls.Add(refresh);
+
+        var logHost = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(18),
+            BackColor = Bg
+        };
+        logHost.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        logHost.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        logHost.Controls.Add(SectionTitle("Atividade"), 0, 0);
+        logHost.Controls.Add(_log, 0, 1);
+
+        split.Panel1.Controls.Add(status);
+        split.Panel2.Controls.Add(logHost);
+
+        return page.With(split);
+    }
+
+    private Control BuildActionBar()
+    {
+        var bar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            BackColor = Bg,
+            Padding = new Padding(0, 10, 0, 0)
         };
 
         var apply = NewButton("Salvar e aplicar", primary: true);
-        apply.Click += async (_, _) => await RunUiActionAsync("Aplicando políticas...", ApplyPolicies);
+        apply.Click += async (_, _) =>
+            await RunUiActionAsync("Aplicando políticas...", ApplyPolicies);
 
         var revert = NewButton("Restaurar políticas");
-        revert.Click += async (_, _) => await RunUiActionAsync("Restaurando políticas...", RevertPolicies);
+        revert.Click += async (_, _) =>
+            await RunUiActionAsync("Restaurando políticas...", RevertPolicies);
 
         var install = NewButton("Instalar serviço");
-        install.Click += async (_, _) => await RunUiActionAsync(
-            "Instalando serviço...",
-            () => WindowsServiceManager.EnsureInstalledAndRunning());
+        install.Click += async (_, _) =>
+            await RunUiActionAsync(
+                "Instalando serviço...",
+                () => WindowsServiceManager.EnsureInstalledAndRunning());
 
         var remove = NewButton("Remover serviço");
-        remove.Click += async (_, _) => await RunUiActionAsync(
-            "Removendo serviço...",
-            WindowsServiceManager.Remove);
+        remove.Click += async (_, _) =>
+            await RunUiActionAsync(
+                "Removendo serviço...",
+                WindowsServiceManager.Remove);
 
-        body.Controls.Add(apply);
-        body.Controls.Add(revert);
-        body.Controls.Add(install);
-        body.Controls.Add(remove);
+        bar.Controls.Add(apply);
+        bar.Controls.Add(revert);
+        bar.Controls.Add(install);
+        bar.Controls.Add(remove);
 
-        panel.Controls.Add(body);
-        return panel;
+        return bar;
     }
 
-    private Control BuildStatusCard()
+    private void ConfigureAppsGrid()
     {
-        var panel = Card("Status");
-        var body = new TableLayoutPanel
+        _appsGrid.EnableHeadersVisualStyles = false;
+        _appsGrid.ColumnHeadersDefaultCellStyle.BackColor = Surface2;
+        _appsGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        _appsGrid.DefaultCellStyle.BackColor = Color.FromArgb(20, 24, 31);
+        _appsGrid.DefaultCellStyle.ForeColor = Color.FromArgb(225, 231, 239);
+        _appsGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(38, 78, 120);
+        _appsGrid.DefaultCellStyle.SelectionForeColor = Color.White;
+
+        _appsGrid.Columns.Add(new DataGridViewCheckBoxColumn
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 4,
-            Padding = new Padding(14, 8, 14, 14)
-        };
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            DataPropertyName = nameof(ManagedApplication.Allowed),
+            HeaderText = "Permitir",
+            Width = 72,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+        });
 
-        AddStatusRow(body, 0, "Serviço", _serviceStatus);
-        AddStatusRow(body, 1, "Última aplicação", _lastApplied);
-        AddStatusRow(body, 2, "Configuração", _configPath);
-
-        var refresh = NewButton("Atualizar status");
-        refresh.Click += (_, _) => RefreshStatus();
-        body.Controls.Add(refresh, 1, 3);
-
-        panel.Controls.Add(body);
-        return panel;
-    }
-
-    private Control BuildLogCard()
-    {
-        var panel = Card("Atividade");
-        var host = new Panel
+        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(14, 8, 14, 14)
-        };
-        host.Controls.Add(_log);
-        panel.Controls.Add(host);
-        return panel;
+            DataPropertyName = nameof(ManagedApplication.DisplayName),
+            HeaderText = "Programa",
+            ReadOnly = true,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            FillWeight = 25
+        });
+
+        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = nameof(ManagedApplication.Publisher),
+            HeaderText = "Fabricante",
+            ReadOnly = true,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            FillWeight = 20
+        });
+
+        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = nameof(ManagedApplication.ExecutablePath),
+            HeaderText = "Executável",
+            ReadOnly = true,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            FillWeight = 55
+        });
+
+        _appsGrid.DataSource = _appRows;
     }
 
     private void LoadConfig()
@@ -464,9 +547,7 @@ public sealed class MainForm : Form
         _domains.Text = string.Join(Environment.NewLine, config.AllowedDomains);
 
         ReplaceAppRows(config.ManagedApplications);
-
-        if (_appRows.Count == 0)
-            RefreshInstalledApplications();
+        UpdateAppCount();
     }
 
     private PolicyConfig ReadConfig()
@@ -503,17 +584,26 @@ public sealed class MainForm : Form
         return previous;
     }
 
-    private void RefreshInstalledApplications()
+    private async Task RefreshInstalledApplicationsAsync()
     {
         try
         {
-            Cursor = Cursors.WaitCursor;
+            UseWaitCursor = true;
+            AppendLog("Lendo programas instalados...");
 
             var current = _appRows
                 .GroupBy(AppKey, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+                .ToDictionary(g => g.Key, g => CloneApplication(g.First()), StringComparer.OrdinalIgnoreCase);
 
-            var scanned = AppInventoryService.Scan();
+            var manuallyAdded = _appRows
+                .Where(x => string.Equals(
+                    x.Publisher,
+                    "Adicionado manualmente",
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(CloneApplication)
+                .ToList();
+
+            var scanned = await Task.Run(AppInventoryService.Scan);
 
             foreach (var app in scanned)
             {
@@ -521,17 +611,19 @@ public sealed class MainForm : Form
                     app.Allowed = previous.Allowed;
             }
 
-            foreach (var manuallyAdded in _appRows.Where(x =>
-                         !string.IsNullOrWhiteSpace(x.ExecutablePath) &&
-                         scanned.All(y => !string.Equals(
-                             y.ExecutablePath,
-                             x.ExecutablePath,
-                             StringComparison.OrdinalIgnoreCase))))
+            foreach (var manual in manuallyAdded)
             {
-                scanned.Add(CloneApplication(manuallyAdded));
+                if (scanned.All(y => !string.Equals(
+                        y.ExecutablePath,
+                        manual.ExecutablePath,
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    scanned.Add(manual);
+                }
             }
 
             ReplaceAppRows(scanned);
+            UpdateAppCount();
             AppendLog($"Inventário atualizado: {_appRows.Count} aplicativos.");
         }
         catch (Exception ex)
@@ -540,7 +632,7 @@ public sealed class MainForm : Form
         }
         finally
         {
-            Cursor = Cursors.Default;
+            UseWaitCursor = false;
         }
     }
 
@@ -575,6 +667,8 @@ public sealed class MainForm : Form
             Publisher = "Adicionado manualmente",
             Allowed = true
         });
+
+        UpdateAppCount();
     }
 
     private void SetAllManageableApplications(bool allowed)
@@ -606,6 +700,13 @@ public sealed class MainForm : Form
             _appRows.RaiseListChangedEvents = true;
             _appRows.ResetBindings();
         }
+    }
+
+    private void UpdateAppCount()
+    {
+        var manageable = _appRows.Count(x => !string.IsNullOrWhiteSpace(x.ExecutablePath));
+        var blocked = _appRows.Count(x => !x.Allowed && !string.IsNullOrWhiteSpace(x.ExecutablePath));
+        _appCount.Text = $"{_appRows.Count} encontrados • {manageable} com EXE identificado • {blocked} bloqueados";
     }
 
     private void ApplyPolicies()
@@ -685,63 +786,65 @@ public sealed class MainForm : Form
         _log.ScrollToCaret();
     }
 
-    private static ManagedApplication CloneApplication(ManagedApplication source) => new()
+    private static TabPage NewTabPage(string text) => new(text)
     {
-        DisplayName = source.DisplayName,
-        Publisher = source.Publisher,
-        ExecutablePath = source.ExecutablePath,
-        ProcessName = source.ProcessName,
-        Allowed = source.Allowed
+        BackColor = Bg,
+        ForeColor = TextPrimary,
+        Padding = new Padding(0)
     };
 
-    private static string AppKey(ManagedApplication app) =>
-        !string.IsNullOrWhiteSpace(app.ExecutablePath)
-            ? app.ExecutablePath
-            : $"{app.DisplayName}|{app.Publisher}";
-
-    private static Panel Card(string title)
+    private static Label SectionTitle(string text) => new()
     {
-        var panel = new Panel
+        Text = text,
+        AutoSize = true,
+        Font = new Font("Segoe UI Semibold", 13f),
+        ForeColor = Color.White,
+        Margin = new Padding(3, 5, 3, 10)
+    };
+
+    private static Label DescriptionLabel(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = TextMuted,
+        MaximumSize = new Size(820, 0),
+        Margin = new Padding(3, 5, 3, 12)
+    };
+
+    private static Control StatusPair(string caption, Label value)
+    {
+        var panel = new TableLayoutPanel
         {
-            Width = 710,
-            Height = 100,
+            Width = 300,
+            Height = 62,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(3, 4, 3, 4),
+            BackColor = Surface
+        };
+
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        panel.Controls.Add(new Label
+        {
+            Text = caption,
             AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            BackColor = Color.FromArgb(22, 27, 34),
-            Margin = new Padding(0, 0, 0, 14),
-            Padding = new Padding(0)
-        };
+            ForeColor = TextMuted,
+            Margin = new Padding(10, 7, 0, 0)
+        }, 0, 0);
 
-        var titleLabel = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Top,
-            Height = 42,
-            Padding = new Padding(14, 12, 0, 0),
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI Semibold", 11f)
-        };
-
-        panel.Controls.Add(titleLabel);
-        titleLabel.BringToFront();
+        value.Margin = new Padding(10, 2, 6, 0);
+        panel.Controls.Add(value, 0, 1);
 
         return panel;
     }
-
-    private static FlowLayoutPanel BodyFlow() => new()
-    {
-        Dock = DockStyle.Top,
-        AutoSize = true,
-        FlowDirection = FlowDirection.TopDown,
-        WrapContents = false,
-        Padding = new Padding(14, 8, 14, 14)
-    };
 
     private static CheckBox NewCheckBox(string text) => new()
     {
         Text = text,
         AutoSize = true,
-        ForeColor = Color.FromArgb(225, 231, 239),
+        ForeColor = TextPrimary,
         Margin = new Padding(3, 5, 3, 5)
     };
 
@@ -755,7 +858,7 @@ public sealed class MainForm : Form
         ForeColor = Color.White,
         FlatAppearance = { BorderSize = 0 },
         Padding = new Padding(10, 0, 10, 0),
-        Margin = new Padding(3, 3, 8, 3),
+        Margin = new Padding(4, 2, 4, 2),
         Cursor = Cursors.Hand
     };
 
@@ -763,18 +866,29 @@ public sealed class MainForm : Form
     {
         AutoSize = true,
         ForeColor = Color.FromArgb(220, 226, 234),
-        MaximumSize = new Size(250, 0)
+        MaximumSize = new Size(650, 0)
     };
 
-    private static void AddStatusRow(TableLayoutPanel panel, int row, string caption, Label value)
+    private static ManagedApplication CloneApplication(ManagedApplication source) => new()
     {
-        panel.Controls.Add(new Label
-        {
-            Text = caption,
-            AutoSize = true,
-            ForeColor = Color.FromArgb(140, 151, 165)
-        }, 0, row);
+        DisplayName = source.DisplayName,
+        Publisher = source.Publisher,
+        ExecutablePath = source.ExecutablePath,
+        ProcessName = source.ProcessName,
+        Allowed = source.Allowed
+    };
 
-        panel.Controls.Add(value, 1, row);
+    private static string AppKey(ManagedApplication app) =>
+        !string.IsNullOrWhiteSpace(app.ExecutablePath)
+            ? app.ExecutablePath
+            : $"{app.DisplayName}|{app.Publisher}";
+}
+
+internal static class TabPageExtensions
+{
+    public static TabPage With(this TabPage page, Control control)
+    {
+        page.Controls.Add(control);
+        return page;
     }
 }
