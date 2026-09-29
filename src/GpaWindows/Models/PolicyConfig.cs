@@ -6,6 +6,13 @@ public sealed class PolicyConfig
     public bool LockWallpaper { get; set; }
     public bool LockTheme { get; set; }
 
+    public bool BlockAudio { get; set; }
+    public List<string> AudioDeviceBackup { get; set; } = [];
+
+    public bool ApplicationControlEnabled { get; set; }
+    public bool BlockUnknownApplications { get; set; }
+    public List<ManagedApplication> ManagedApplications { get; set; } = [];
+
     public bool DnsAllowListEnabled { get; set; }
     public bool DisableBrowserDoH { get; set; } = true;
     public bool SanitizeHostsWhenDnsAllowListEnabled { get; set; } = true;
@@ -24,4 +31,13 @@ public sealed class AdapterDnsBackup
 {
     public string InterfaceAlias { get; set; } = string.Empty;
     public List<string> ServerAddresses { get; set; } = [];
+}
+
+public sealed class ManagedApplication
+{
+    public string DisplayName { get; set; } = string.Empty;
+    public string Publisher { get; set; } = string.Empty;
+    public string ExecutablePath { get; set; } = string.Empty;
+    public string ProcessName { get; set; } = string.Empty;
+    public bool Allowed { get; set; } = true;
 }
