@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using GpaWindows.Models;
 using GpaWindows.Services;
 
@@ -8,9 +9,34 @@ public sealed class MainForm : Form
     private readonly CheckBox _enabled = NewCheckBox("Ativar fiscalização contínua");
     private readonly CheckBox _lockWallpaper = NewCheckBox("Impedir alteração do papel de parede");
     private readonly CheckBox _lockTheme = NewCheckBox("Impedir alteração do tema do Windows");
+    private readonly CheckBox _blockAudio = NewCheckBox("Bloquear áudio do computador (desabilitar endpoints de áudio)");
+
+    private readonly CheckBox _applicationControl = NewCheckBox("Ativar controle de aplicativos");
+    private readonly CheckBox _blockUnknownApps = NewCheckBox("Modo estrito: bloquear executáveis desconhecidos/portáteis não autorizados");
+
     private readonly CheckBox _dnsAllowList = NewCheckBox("Ativar DNS Allowlist (bloquear qualquer domínio não autorizado)");
     private readonly CheckBox _disableDoH = NewCheckBox("Desativar DNS-over-HTTPS no Edge e Chrome");
     private readonly CheckBox _sanitizeHosts = NewCheckBox("Proteger/limpar o arquivo hosts durante o modo estrito");
+
+    private readonly BindingList<ManagedApplication> _appRows = [];
+    private readonly DataGridView _appsGrid = new()
+    {
+        AutoGenerateColumns = false,
+        AllowUserToAddRows = false,
+        AllowUserToDeleteRows = false,
+        AllowUserToOrderColumns = true,
+        RowHeadersVisible = false,
+        MultiSelect = false,
+        SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+        BackgroundColor = Color.FromArgb(20, 24, 31),
+        GridColor = Color.FromArgb(48, 54, 61),
+        BorderStyle = BorderStyle.None,
+        Height = 300,
+        Width = 650,
+        AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None,
+        ColumnHeadersHeight = 36,
+        RowTemplate = { Height = 32 }
+    };
 
     private readonly TextBox _domains = new()
     {
@@ -53,14 +79,15 @@ public sealed class MainForm : Form
     public MainForm()
     {
         Text = "GPA Windows — Diretivas Locais";
-        Width = 1080;
-        Height = 820;
-        MinimumSize = new Size(940, 680);
+        Width = 1240;
+        Height = 900;
+        MinimumSize = new Size(1040, 720);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(13, 17, 23);
         ForeColor = Color.FromArgb(235, 240, 246);
         Font = new Font("Segoe UI", 10f);
 
+        ConfigureAppsGrid();
         Controls.Add(BuildLayout());
 
         Load += (_, _) =>
@@ -68,6 +95,50 @@ public sealed class MainForm : Form
             LoadConfig();
             RefreshStatus();
         };
+    }
+
+    private void ConfigureAppsGrid()
+    {
+        _appsGrid.EnableHeadersVisualStyles = false;
+        _appsGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(33, 38, 45);
+        _appsGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        _appsGrid.DefaultCellStyle.BackColor = Color.FromArgb(20, 24, 31);
+        _appsGrid.DefaultCellStyle.ForeColor = Color.FromArgb(225, 231, 239);
+        _appsGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(38, 78, 120);
+        _appsGrid.DefaultCellStyle.SelectionForeColor = Color.White;
+
+        _appsGrid.Columns.Add(new DataGridViewCheckBoxColumn
+        {
+            DataPropertyName = nameof(ManagedApplication.Allowed),
+            HeaderText = "Permitir",
+            Width = 70
+        });
+
+        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = nameof(ManagedApplication.DisplayName),
+            HeaderText = "Programa",
+            Width = 190,
+            ReadOnly = true
+        });
+
+        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = nameof(ManagedApplication.Publisher),
+            HeaderText = "Fabricante",
+            Width = 140,
+            ReadOnly = true
+        });
+
+        _appsGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = nameof(ManagedApplication.ExecutablePath),
+            HeaderText = "Executável",
+            Width = 300,
+            ReadOnly = true
+        });
+
+        _appsGrid.DataSource = _appRows;
     }
 
     private Control BuildLayout()
@@ -80,8 +151,8 @@ public sealed class MainForm : Form
             RowCount = 2
         };
 
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -117,6 +188,8 @@ public sealed class MainForm : Form
 
         left.Controls.Add(BuildGeneralCard());
         left.Controls.Add(BuildPersonalizationCard());
+        left.Controls.Add(BuildAudioCard());
+        left.Controls.Add(BuildApplicationControlCard());
         left.Controls.Add(BuildDnsCard());
         left.Controls.Add(BuildActionsCard());
 
@@ -153,7 +226,7 @@ public sealed class MainForm : Form
         };
         intervalRow.Controls.Add(new Label
         {
-            Text = "Reaplicar a cada",
+            Text = "Reaplicar diretivas gerais a cada",
             AutoSize = true,
             Padding = new Padding(0, 5, 4, 0)
         });
@@ -180,6 +253,83 @@ public sealed class MainForm : Form
         return panel;
     }
 
+    private Control BuildAudioCard()
+    {
+        var panel = Card("Áudio");
+        var body = BodyFlow();
+
+        body.Controls.Add(_blockAudio);
+        body.Controls.Add(new Label
+        {
+            Text = "O bloqueio desabilita os endpoints PnP de áudio. Isso impede reprodução e também pode indisponibilizar microfones enquanto a política estiver ativa.",
+            ForeColor = Color.FromArgb(160, 170, 182),
+            AutoSize = true,
+            MaximumSize = new Size(650, 0),
+            Margin = new Padding(3, 6, 3, 3)
+        });
+
+        panel.Controls.Add(body);
+        return panel;
+    }
+
+    private Control BuildApplicationControlCard()
+    {
+        var panel = Card("Controle de aplicativos");
+        var body = BodyFlow();
+
+        body.Controls.Add(_applicationControl);
+        body.Controls.Add(_blockUnknownApps);
+
+        body.Controls.Add(new Label
+        {
+            Text = "Marcado = permitido. Desmarcado = o serviço encerra o programa ao detectar sua execução. Componentes do Windows e o próprio GPA Windows são protegidos.",
+            ForeColor = Color.FromArgb(160, 170, 182),
+            AutoSize = true,
+            MaximumSize = new Size(650, 0),
+            Margin = new Padding(3, 6, 3, 8)
+        });
+
+        var toolbar = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = new Padding(3, 0, 3, 8)
+        };
+
+        var refresh = NewButton("Atualizar lista");
+        refresh.Click += (_, _) => RefreshInstalledApplications();
+
+        var addExe = NewButton("Adicionar EXE...");
+        addExe.Click += (_, _) => AddExecutableManually();
+
+        var allowAll = NewButton("Permitir todos");
+        allowAll.Click += (_, _) => SetAllManageableApplications(true);
+
+        var blockAll = NewButton("Bloquear todos");
+        blockAll.Click += (_, _) => SetAllManageableApplications(false);
+
+        toolbar.Controls.Add(refresh);
+        toolbar.Controls.Add(addExe);
+        toolbar.Controls.Add(allowAll);
+        toolbar.Controls.Add(blockAll);
+
+        body.Controls.Add(toolbar);
+        body.Controls.Add(_appsGrid);
+
+        body.Controls.Add(new Label
+        {
+            Text = "Entradas sem caminho de executável foram inventariadas, mas não podem ser bloqueadas até que um EXE correspondente seja informado.",
+            ForeColor = Color.FromArgb(160, 170, 182),
+            AutoSize = true,
+            MaximumSize = new Size(650, 0),
+            Margin = new Padding(3, 6, 3, 3)
+        });
+
+        panel.Controls.Add(body);
+        return panel;
+    }
+
     private Control BuildDnsCard()
     {
         var panel = Card("Rede / DNS Allowlist");
@@ -194,11 +344,11 @@ public sealed class MainForm : Form
             Text = "Domínios permitidos — um por linha. Permitir exemplo.com também libera seus subdomínios.",
             ForeColor = Color.FromArgb(160, 170, 182),
             AutoSize = true,
-            MaximumSize = new Size(560, 0),
+            MaximumSize = new Size(650, 0),
             Margin = new Padding(3, 12, 3, 6)
         });
 
-        _domains.Width = 560;
+        _domains.Width = 650;
         body.Controls.Add(_domains);
 
         var dnsRow = new FlowLayoutPanel
@@ -302,21 +452,43 @@ public sealed class MainForm : Form
         _enabled.Checked = config.Enabled;
         _lockWallpaper.Checked = config.LockWallpaper;
         _lockTheme.Checked = config.LockTheme;
+        _blockAudio.Checked = config.BlockAudio;
+        _applicationControl.Checked = config.ApplicationControlEnabled;
+        _blockUnknownApps.Checked = config.BlockUnknownApplications;
+
         _dnsAllowList.Checked = config.DnsAllowListEnabled;
         _disableDoH.Checked = config.DisableBrowserDoH;
         _sanitizeHosts.Checked = config.SanitizeHostsWhenDnsAllowListEnabled;
         _upstreamDns.Text = config.UpstreamDns;
         _interval.Value = Math.Clamp(config.EnforcementIntervalSeconds, 10, 3600);
         _domains.Text = string.Join(Environment.NewLine, config.AllowedDomains);
+
+        ReplaceAppRows(config.ManagedApplications);
+
+        if (_appRows.Count == 0)
+            RefreshInstalledApplications();
     }
 
     private PolicyConfig ReadConfig()
     {
+        _appsGrid.EndEdit();
+
+        if (BindingContext[_appRows] is CurrencyManager manager)
+            manager.EndCurrentEdit();
+
         var previous = ConfigStore.Load();
 
         previous.Enabled = _enabled.Checked;
         previous.LockWallpaper = _lockWallpaper.Checked;
         previous.LockTheme = _lockTheme.Checked;
+        previous.BlockAudio = _blockAudio.Checked;
+        previous.ApplicationControlEnabled = _applicationControl.Checked;
+        previous.BlockUnknownApplications = _blockUnknownApps.Checked;
+
+        previous.ManagedApplications = _appRows
+            .Select(CloneApplication)
+            .ToList();
+
         previous.DnsAllowListEnabled = _dnsAllowList.Checked;
         previous.DisableBrowserDoH = _disableDoH.Checked;
         previous.SanitizeHostsWhenDnsAllowListEnabled = _sanitizeHosts.Checked;
@@ -329,6 +501,111 @@ public sealed class MainForm : Form
             .ToList();
 
         return previous;
+    }
+
+    private void RefreshInstalledApplications()
+    {
+        try
+        {
+            Cursor = Cursors.WaitCursor;
+
+            var current = _appRows
+                .GroupBy(AppKey, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            var scanned = AppInventoryService.Scan();
+
+            foreach (var app in scanned)
+            {
+                if (current.TryGetValue(AppKey(app), out var previous))
+                    app.Allowed = previous.Allowed;
+            }
+
+            foreach (var manuallyAdded in _appRows.Where(x =>
+                         !string.IsNullOrWhiteSpace(x.ExecutablePath) &&
+                         scanned.All(y => !string.Equals(
+                             y.ExecutablePath,
+                             x.ExecutablePath,
+                             StringComparison.OrdinalIgnoreCase))))
+            {
+                scanned.Add(CloneApplication(manuallyAdded));
+            }
+
+            ReplaceAppRows(scanned);
+            AppendLog($"Inventário atualizado: {_appRows.Count} aplicativos.");
+        }
+        catch (Exception ex)
+        {
+            AppendLog("ERRO ao inventariar aplicativos: " + ex.Message);
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+        }
+    }
+
+    private void AddExecutableManually()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Adicionar executável ao controle de aplicativos",
+            Filter = "Executáveis (*.exe)|*.exe|Todos os arquivos (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        var fullPath = Path.GetFullPath(dialog.FileName);
+
+        if (_appRows.Any(x => string.Equals(
+                x.ExecutablePath,
+                fullPath,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        _appRows.Add(new ManagedApplication
+        {
+            DisplayName = Path.GetFileNameWithoutExtension(fullPath),
+            ExecutablePath = fullPath,
+            ProcessName = Path.GetFileName(fullPath),
+            Publisher = "Adicionado manualmente",
+            Allowed = true
+        });
+    }
+
+    private void SetAllManageableApplications(bool allowed)
+    {
+        _appsGrid.EndEdit();
+
+        foreach (var app in _appRows.Where(x => !string.IsNullOrWhiteSpace(x.ExecutablePath)))
+            app.Allowed = allowed;
+
+        _appsGrid.Refresh();
+    }
+
+    private void ReplaceAppRows(IEnumerable<ManagedApplication> applications)
+    {
+        _appRows.RaiseListChangedEvents = false;
+
+        try
+        {
+            _appRows.Clear();
+
+            foreach (var app in applications
+                         .OrderBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+            {
+                _appRows.Add(CloneApplication(app));
+            }
+        }
+        finally
+        {
+            _appRows.RaiseListChangedEvents = true;
+            _appRows.ResetBindings();
+        }
     }
 
     private void ApplyPolicies()
@@ -408,11 +685,25 @@ public sealed class MainForm : Form
         _log.ScrollToCaret();
     }
 
+    private static ManagedApplication CloneApplication(ManagedApplication source) => new()
+    {
+        DisplayName = source.DisplayName,
+        Publisher = source.Publisher,
+        ExecutablePath = source.ExecutablePath,
+        ProcessName = source.ProcessName,
+        Allowed = source.Allowed
+    };
+
+    private static string AppKey(ManagedApplication app) =>
+        !string.IsNullOrWhiteSpace(app.ExecutablePath)
+            ? app.ExecutablePath
+            : $"{app.DisplayName}|{app.Publisher}";
+
     private static Panel Card(string title)
     {
         var panel = new Panel
         {
-            Width = 610,
+            Width = 710,
             Height = 100,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
