@@ -12,6 +12,8 @@ public static class PolicyEngine
         Validate(config);
 
         RegistryPolicyService.Apply(config);
+        AudioPolicyService.Apply(config);
+        AppControlService.Enforce(config);
 
         if (config.DnsAllowListEnabled)
         {
@@ -30,10 +32,14 @@ public static class PolicyEngine
     {
         RegistryPolicyService.Revert();
         NetworkPolicyService.RestoreNetwork(config);
+        AudioPolicyService.Restore(config);
 
         config.Enabled = false;
         config.LockWallpaper = false;
         config.LockTheme = false;
+        config.BlockAudio = false;
+        config.ApplicationControlEnabled = false;
+        config.BlockUnknownApplications = false;
         config.DnsAllowListEnabled = false;
         config.LastAppliedUtc = DateTimeOffset.UtcNow;
 
@@ -42,14 +48,25 @@ public static class PolicyEngine
 
     public static void Validate(PolicyConfig config)
     {
-        if (!config.DnsAllowListEnabled)
-            return;
+        if (config.DnsAllowListEnabled)
+        {
+            if (config.AllowedDomains.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "Adicione pelo menos um domínio permitido antes de ativar o DNS Allowlist.");
+            }
 
-        if (config.AllowedDomains.Count == 0)
+            if (!System.Net.IPAddress.TryParse(config.UpstreamDns, out _))
+                throw new InvalidOperationException("Informe um endereço IP válido para o DNS upstream.");
+        }
+
+        if (config.ApplicationControlEnabled &&
+            config.BlockUnknownApplications &&
+            !config.ManagedApplications.Any(x =>
+                x.Allowed && !string.IsNullOrWhiteSpace(x.ExecutablePath)))
+        {
             throw new InvalidOperationException(
-                "Adicione pelo menos um domínio permitido antes de ativar o DNS Allowlist.");
-
-        if (!System.Net.IPAddress.TryParse(config.UpstreamDns, out _))
-            throw new InvalidOperationException("Informe um endereço IP válido para o DNS upstream.");
+                "O modo estrito de aplicativos precisa de pelo menos um executável permitido.");
+        }
     }
 }
