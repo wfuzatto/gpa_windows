@@ -7,6 +7,7 @@ public sealed class GpaPolicyWindowsService : ServiceBase
 {
     private CancellationTokenSource? _cts;
     private Task? _worker;
+    private Task? _appWorker;
     private DnsFilterService? _dnsFilter;
     private string? _dnsSignature;
 
@@ -22,6 +23,7 @@ public sealed class GpaPolicyWindowsService : ServiceBase
     {
         _cts = new CancellationTokenSource();
         _worker = Task.Run(() => RunLoopAsync(_cts.Token));
+        _appWorker = Task.Run(() => RunApplicationGuardLoopAsync(_cts.Token));
     }
 
     protected override void OnStop()
@@ -32,6 +34,7 @@ public sealed class GpaPolicyWindowsService : ServiceBase
             _dnsFilter?.Dispose();
             _dnsFilter = null;
             _worker?.Wait(TimeSpan.FromSeconds(5));
+            _appWorker?.Wait(TimeSpan.FromSeconds(5));
         }
         catch
         {
@@ -41,6 +44,7 @@ public sealed class GpaPolicyWindowsService : ServiceBase
             _cts?.Dispose();
             _cts = null;
             _worker = null;
+            _appWorker = null;
         }
     }
 
@@ -74,6 +78,33 @@ public sealed class GpaPolicyWindowsService : ServiceBase
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), token);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private static async Task RunApplicationGuardLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                var config = ConfigStore.Load();
+
+                if (config.Enabled && config.ApplicationControlEnabled)
+                    AppControlService.Enforce(config);
+            }
+            catch (Exception ex)
+            {
+                WriteServiceLog(ex);
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(750), token);
             }
             catch (OperationCanceledException)
             {
